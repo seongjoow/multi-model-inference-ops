@@ -1,0 +1,50 @@
+# EC2 GPU 구성: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+# vLLM과 CV 워커가 GPU 한 장(T4 16GB)을 나눠 쓴다. 이 공유 지점이 경합 실험의 대상.
+services:
+  vllm:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:latest} # 첫 실행 후 실제 버전 태그로 고정하고 보고서에 기록
+    command:
+      - --model=${LLM_MODEL:-Qwen/Qwen2.5-1.5B-Instruct}
+      - --dtype=half # T4(Turing)는 bf16 미지원
+      - --gpu-memory-utilization=${VLLM_GPU_MEM_UTIL:-0.5} # 기본 0.9면 CV 워커가 쓸 VRAM이 남지 않음
+      - --max-model-len=${VLLM_MAX_MODEL_LEN:-4096}
+      - --max-num-seqs=${VLLM_MAX_NUM_SEQS:-32}
+    ipc: host
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 60
+      start_period: 300s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  gateway:
+    environment:
+      LLM_BASE_URL: http://vllm:8000
+    depends_on:
+      vllm:
+        condition: service_healthy
+
+  cv-worker:
+    environment:
+      CV_DEVICE: "0"
+      CV_HALF: "true"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  hf-cache:

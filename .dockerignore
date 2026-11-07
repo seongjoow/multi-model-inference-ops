@@ -1,0 +1,11 @@
+.git
+.venv
+.env
+data
+models
+results
+docs
+**/__pycache__
+*.gguf
+*.pt
+*.onnx
