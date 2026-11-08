@@ -46,5 +46,33 @@ services:
               count: 1
               capabilities: [gpu]
 
+  # ---- 관측 (EC2 전용)
+  prometheus:
+    volumes:
+      - ./monitoring/prometheus/scrape/llm-gpu.yml:/etc/prometheus/scrape/llm.yml:ro # llama.cpp 대신 vLLM
+      - ./monitoring/prometheus/scrape/gpu-host.yml:/etc/prometheus/scrape/gpu-host.yml:ro
+
+  gpu-exporter: # GPU 사용률·VRAM(프로세스별)·전력
+    build:
+      context: .
+      dockerfile: monitoring/gpu-exporter/Dockerfile
+    pid: host # 다른 컨테이너의 프로세스 이름(vllm, cv-worker)을 알아보려고
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  node-exporter: # 호스트 전체 CPU·메모리
+    image: prom/node-exporter:v1.9.1
+    command: ["--path.rootfs=/host"]
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
 volumes:
   hf-cache:

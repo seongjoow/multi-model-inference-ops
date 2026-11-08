@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: inference-ops
+    type: file
+    allowUiUpdates: true # 화면에서 고쳐 볼 수는 있지만, 재시작하면 파일 내용으로 돌아간다
+    options:
+      path: /etc/grafana/dashboards

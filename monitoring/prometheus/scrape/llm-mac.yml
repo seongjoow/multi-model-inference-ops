@@ -1,0 +1,7 @@
+# Mac: 호스트에서 도는 llama.cpp (llm_mac.sh 가 --metrics 로 켬)
+scrape_configs:
+  - job_name: llm
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+        labels:
+          server: llama.cpp

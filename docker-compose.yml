@@ -62,3 +62,52 @@ services:
       retries: 3
       start_period: 60s
     restart: unless-stopped
+
+  # ---- 관측: 각 서비스의 /metrics 를 2초마다 모아(Prometheus) 그래프로 보여줌(Grafana)
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/scrape/llm-mac.yml:/etc/prometheus/scrape/llm.yml:ro # EC2에선 gpu.yml이 교체
+      - prometheus-data:/prometheus
+    ports: ["127.0.0.1:9090:9090"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.4.13
+    environment:
+      # 127.0.0.1 에만 열리므로 로그인 없이 바로 대시보드로 (EC2는 SSH 터널로 접속)
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/inference-ops.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+  # ---- 부하 생성기: 평소엔 안 뜨고 make load-* 로 한 번씩 실행 (profiles)
+  loadgen:
+    build:
+      context: .
+      dockerfile: loadgen/Dockerfile
+    profiles: ["tools"]
+    user: "1000:1000"
+    environment:
+      GATEWAY_URL: http://gateway:8000
+      GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    volumes:
+      - ./data:/app/data:ro
+      - ./results:/app/results
+      - ./.env:/app/.env:ro
+
+volumes:
+  prometheus-data:

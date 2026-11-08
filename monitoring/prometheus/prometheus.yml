@@ -1,0 +1,27 @@
+# 2초마다 각 서비스의 /metrics 를 긁어 시간순으로 저장한다.
+# 실험이 1~2분 단위라 기본값(15초)으로는 변화가 뭉개진다.
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+# 환경마다 다른 대상은 scrape/ 아래 파일로 나눈다.
+# Mac: llm.yml = llama.cpp(호스트) / EC2: llm.yml = vLLM + gpu-host.yml(GPU, 호스트 CPU·메모리)
+scrape_config_files:
+  - /etc/prometheus/scrape/*.yml
+
+scrape_configs:
+  - job_name: gateway
+    static_configs:
+      - targets: ["gateway:8000"]
+
+  # 워커를 여러 개 띄워도(--scale cv-worker=N) 모두 찾도록 DNS로 조회
+  - job_name: cv-worker
+    dns_sd_configs:
+      - names: ["cv-worker"]
+        type: A
+        port: 9101
+        refresh_interval: 5s
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

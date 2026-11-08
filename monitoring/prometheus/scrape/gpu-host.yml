@@ -1,0 +1,8 @@
+# EC2 전용: GPU(자체 exporter)와 호스트 CPU·메모리(node-exporter)
+scrape_configs:
+  - job_name: gpu
+    static_configs:
+      - targets: ["gpu-exporter:9400"]
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]

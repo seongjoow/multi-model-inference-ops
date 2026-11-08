@@ -12,6 +12,8 @@ LLM과 Computer Vision 두 워크로드를 한 장비에서 함께 서빙하고,
 gateway/            FastAPI 게이트웨이 (LLM 프록시, CV 작업 등록·조회)
 workers/cv/         CV 워커 (Redis 큐, 마이크로배치, YOLO / dummy 백엔드)
 common/             공용 코드 (설정, JSON 로그, Redis 키)
+loadgen/            부하 생성기 (요청별 CSV, 실험 조건 기록, 요약)
+monitoring/         Prometheus 수집 설정, Grafana 대시보드, GPU exporter
 scripts/            llm_mac.sh (Mac LLM 서버), smoke_test.sh
 docker-compose.yml      기본 구성 (Mac, CPU)
 docker-compose.gpu.yml  EC2 GPU 구성 (vLLM 추가, CV 워커 GPU 사용)
@@ -37,6 +39,40 @@ make gpu-up      # vLLM + 게이트웨이 + Redis + CV 워커(GPU)
 make gpu-ps      # vllm이 healthy가 될 때까지 대기 (모델 다운로드 포함 수 분)
 make smoke
 ```
+
+`make up`은 GPU가 있으면(EC2) GPU 구성을, 없으면(Mac) 기본 구성을 자동으로 고릅니다.
+
+## 대시보드 (Prometheus + Grafana)
+
+`make up`이 Prometheus와 Grafana도 함께 띄웁니다. 모든 서비스의 `/metrics`를 2초마다 수집합니다.
+
+- Grafana: http://localhost:3000 → "Inference Ops" 대시보드 (LLM, CV, 자원 3구역)
+- Prometheus: http://localhost:9090 → Status > Target health 에서 수집 대상이 모두 UP인지 확인
+
+EC2에서는 포트를 인터넷에 열지 않고 SSH 터널로 봅니다.
+
+```bash
+ssh -i ~/.ssh/mminfops.pem -L 3000:localhost:3000 -L 9090:localhost:9090 -L 8000:localhost:8000 ubuntu@<IP>
+```
+
+GPU 지표는 `monitoring/gpu-exporter`(NVML, 프로세스별 VRAM 포함), 호스트 CPU·메모리는 node-exporter가 수집하며 EC2 구성에만 포함됩니다.
+
+## 부하 실험
+
+```bash
+make load-llm RATE=2 DURATION=60 NAME=baseline-llm-r2   # LLM에 초당 2건, 60초
+make load-cv  RATE=10 DURATION=60 NAME=baseline-cv-r10  # CV에 초당 10건, 60초
+make summary RUNS="results/baseline-llm-r2 results/baseline-cv-r10"
+```
+
+- 기본은 고정 도착률(open loop, 포아송 간격)이고, `ARGS="--concurrency 8"`로 고정 동시성(closed loop)도 가능
+- 앞 10초는 워밍업으로 요약에서 제외 (`--warmup`)
+- LLM 프롬프트는 단어 수(`--input-words`)로 입력 길이를, `--max-tokens`와 `ignore_eos`로 출력 길이를 고정
+- 결과 폴더 `results/<NAME>/`: `requests.csv`(요청별 시간), `summary.json`, `meta.json`(옵션·커밋), `env.txt`(당시 설정)
+- 끝나면 그 실험 구간만 보여주는 Grafana 링크를 출력
+- 모든 요청에 `X-Request-ID: <NAME>-<번호>`가 붙어, 서비스 로그에서 그대로 추적 가능
+
+`python -m loadgen --help`로 전체 옵션을 볼 수 있습니다.
 
 ## API
 
