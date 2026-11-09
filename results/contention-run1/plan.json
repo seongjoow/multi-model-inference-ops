@@ -1,0 +1,57 @@
+{
+  "name": "d3",
+  "started_at": "2026-11-09T08:13:33",
+  "git_commit": "74b779b",
+  "gpu": "GPU 0: Tesla T4 (UUID: GPU-4107237a-437b-a600-d1ce-71c94993b1be)",
+  "args": {
+    "name": "d3",
+    "scenarios": [
+      "llm-only",
+      "cv-only",
+      "mixed-cv-sweep",
+      "mixed-llm-sweep"
+    ],
+    "llm_rates": [
+      2.0,
+      4.0,
+      8.0,
+      10.0,
+      12.0
+    ],
+    "cv_rates": [
+      25.0,
+      50.0,
+      75.0,
+      100.0,
+      150.0
+    ],
+    "llm_fixed": 4.0,
+    "cv_fixed": 25.0,
+    "repeat": 3,
+    "duration": 45.0,
+    "warmup": 10,
+    "cooldown": 10,
+    "seed": 42,
+    "llm_extra": "",
+    "cv_extra": "",
+    "launcher": "docker",
+    "compose": null,
+    "gateway": "http://localhost:8000",
+    "prometheus": "http://localhost:9090",
+    "grafana": "http://localhost:3000",
+    "yes": false
+  },
+  "resource_queries": {
+    "gpu_util_pct": "max(nvidia_gpu_utilization_percent)",
+    "gpu_mem_used_gb": "sum(nvidia_gpu_memory_used_bytes) / 1e9",
+    "gpu_power_w": "sum(nvidia_gpu_power_watts)",
+    "host_cpu_pct": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[10s])))",
+    "cpu_cores_by_job": "sum by (job) (rate(process_cpu_seconds_total[10s]))",
+    "llm_server_running": "sum(vllm:num_requests_running) or sum(llamacpp:requests_processing)",
+    "llm_server_waiting": "sum(vllm:num_requests_waiting) or sum(llamacpp:requests_deferred)",
+    "llm_kv_cache_pct": "100 * (max(vllm:kv_cache_usage_perc) or max(vllm:gpu_cache_usage_perc))",
+    "gateway_llm_waiting": "max(gateway_llm_waiting)",
+    "cv_queue_depth": "max(cv_queue_depth)",
+    "cv_batch_size": "sum(rate(cv_worker_batch_size_sum[10s])) / sum(rate(cv_worker_batch_size_count[10s]))"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "run": "d3-mixed-cv-sweep-r2-cv100",
+  "workload": "cv",
+  "args": {
+    "cmd": "run",
+    "workload": "cv",
+    "rate": 100.0,
+    "concurrency": null,
+    "arrival": "poisson",
+    "duration": 45.0,
+    "warmup": 10.0,
+    "target": "http://gateway:8000",
+    "timeout": 120,
+    "max_inflight": 1000,
+    "seed": 43,
+    "name": "d3-mixed-cv-sweep-r2-cv100",
+    "out": "results/d3/mixed-cv-sweep/rep2/llm4_cv100/cv",
+    "env_file": ".env",
+    "input_words": 64,
+    "max_tokens": 128,
+    "fixed_output": true,
+    "images": "data/val2017",
+    "num_images": 200
+  },
+  "git_commit": "74b779b",
+  "host": "08b037478afb",
+  "python": "3.11.18",
+  "env_file_copied": true,
+  "start_unix": 1794214352.1684275,
+  "measure_start_unix": 1794214362.1684275,
+  "end_unix": 1794214422.1644664,
+  "interrupted": false
+}

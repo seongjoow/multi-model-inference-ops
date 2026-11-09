@@ -1,0 +1,33 @@
+{
+  "run": "d3-cv-only-r1-cv75",
+  "workload": "cv",
+  "args": {
+    "cmd": "run",
+    "workload": "cv",
+    "rate": 75.0,
+    "concurrency": null,
+    "arrival": "poisson",
+    "duration": 45.0,
+    "warmup": 10.0,
+    "target": "http://gateway:8000",
+    "timeout": 120,
+    "max_inflight": 1000,
+    "seed": 42,
+    "name": "d3-cv-only-r1-cv75",
+    "out": "results/d3/cv-only/rep1/llm0_cv75/cv",
+    "env_file": ".env",
+    "input_words": 64,
+    "max_tokens": 128,
+    "fixed_output": true,
+    "images": "data/val2017",
+    "num_images": 200
+  },
+  "git_commit": "74b779b",
+  "host": "d916aecb76fa",
+  "python": "3.11.18",
+  "env_file_copied": true,
+  "start_unix": 1794212499.2177918,
+  "measure_start_unix": 1794212509.2177918,
+  "end_unix": 1794212554.237159,
+  "interrupted": false
+}

@@ -1,0 +1,33 @@
+{
+  "run": "d3-mixed-llm-sweep-r1-llm2",
+  "workload": "llm",
+  "args": {
+    "cmd": "run",
+    "workload": "llm",
+    "rate": 2.0,
+    "concurrency": null,
+    "arrival": "poisson",
+    "duration": 45.0,
+    "warmup": 10.0,
+    "target": "http://gateway:8000",
+    "timeout": 120,
+    "max_inflight": 1000,
+    "seed": 42,
+    "name": "d3-mixed-llm-sweep-r1-llm2",
+    "out": "results/d3/mixed-llm-sweep/rep1/llm2_cv25/llm",
+    "env_file": ".env",
+    "input_words": 64,
+    "max_tokens": 128,
+    "fixed_output": true,
+    "images": "data/val2017",
+    "num_images": 200
+  },
+  "git_commit": "74b779b",
+  "host": "69426c3a7656",
+  "python": "3.11.18",
+  "env_file_copied": true,
+  "start_unix": 1794213072.1278164,
+  "measure_start_unix": 1794213082.1278164,
+  "end_unix": 1794213128.2595809,
+  "interrupted": false
+}

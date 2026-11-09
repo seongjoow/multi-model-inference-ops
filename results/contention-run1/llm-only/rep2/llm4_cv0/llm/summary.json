@@ -1,0 +1,27 @@
+{
+  "workload": "llm",
+  "requests": 174,
+  "ok": 174,
+  "error_rate": 0.0,
+  "status_counts": {
+    "200": 174
+  },
+  "throughput_rps": 3.867,
+  "latency_p50_ms": 2213.8,
+  "latency_p95_ms": 2907.5,
+  "latency_p99_ms": 2943.5,
+  "latency_mean_ms": 2310.1,
+  "ttft_p50_ms": 60.7,
+  "ttft_p95_ms": 82.4,
+  "ttft_p99_ms": 90.9,
+  "ttft_mean_ms": 62.1,
+  "gw_queue_wait_p50_ms": 0.3,
+  "gw_queue_wait_p95_ms": 1.0,
+  "gw_queue_wait_p99_ms": 2.1,
+  "gw_queue_wait_mean_ms": 0.4,
+  "tpot_p50_ms": 16.9,
+  "tpot_p95_ms": 22.3,
+  "tpot_p99_ms": 22.6,
+  "tpot_mean_ms": 17.7,
+  "output_tokens_per_s": 494.9
+}

@@ -1,0 +1,72 @@
+{
+  "window": {
+    "start_unix": 1794213802.2136054,
+    "end_unix": 1794213847.2136054
+  },
+  "gpu_util_pct": {
+    "mean": 6.3913,
+    "max": 11.0
+  },
+  "gpu_mem_used_gb": {
+    "mean": 8.703,
+    "max": 8.7034
+  },
+  "gpu_power_w": {
+    "mean": 36.509,
+    "max": 46.243
+  },
+  "host_cpu_pct": {
+    "mean": 36.5625,
+    "max": 39.5625
+  },
+  "cpu_cores_by_job": {
+    "cv-worker": {
+      "mean": 0.4221,
+      "max": 0.4651
+    },
+    "gateway": {
+      "mean": 0.6597,
+      "max": 0.7175
+    },
+    "gpu": {
+      "mean": 0.0044,
+      "max": 0.0062
+    },
+    "llm": {
+      "mean": 0.0057,
+      "max": 0.0063
+    },
+    "node": {
+      "mean": 0.0085,
+      "max": 0.01
+    },
+    "prometheus": {
+      "mean": 0.0081,
+      "max": 0.0088
+    }
+  },
+  "llm_server_running": {
+    "mean": 0.0,
+    "max": 0.0
+  },
+  "llm_server_waiting": {
+    "mean": 0.0,
+    "max": 0.0
+  },
+  "llm_kv_cache_pct": {
+    "mean": 0.0,
+    "max": 0.0
+  },
+  "gateway_llm_waiting": {
+    "mean": 0.0,
+    "max": 0.0
+  },
+  "cv_queue_depth": {
+    "mean": 0.4348,
+    "max": 3.0
+  },
+  "cv_batch_size": {
+    "mean": 1.3753,
+    "max": 1.4387
+  }
+}

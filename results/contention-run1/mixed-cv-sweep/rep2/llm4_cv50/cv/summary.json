@@ -1,0 +1,29 @@
+{
+  "workload": "cv",
+  "requests": 2309,
+  "ok": 1040,
+  "error_rate": 0.5496,
+  "status_counts": {
+    "200": 1040,
+    "500": 1133,
+    "conn_error": 136
+  },
+  "throughput_rps": 23.111,
+  "latency_p50_ms": 3888.9,
+  "latency_p95_ms": 4945.2,
+  "latency_p99_ms": 4999.9,
+  "latency_mean_ms": 3789.6,
+  "cv_queue_wait_p50_ms": 3714.6,
+  "cv_queue_wait_p95_ms": 4760.3,
+  "cv_queue_wait_p99_ms": 4816.9,
+  "cv_queue_wait_mean_ms": 3596.3,
+  "cv_batch_wait_p50_ms": 0.6,
+  "cv_batch_wait_p95_ms": 1.4,
+  "cv_batch_wait_p99_ms": 2.4,
+  "cv_batch_wait_mean_ms": 0.7,
+  "cv_inference_p50_ms": 143.8,
+  "cv_inference_p95_ms": 157.1,
+  "cv_inference_p99_ms": 159.8,
+  "cv_inference_mean_ms": 132.5,
+  "cv_batch_size_mean": 7.99
+}

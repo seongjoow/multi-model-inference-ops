@@ -1,0 +1,33 @@
+{
+  "run": "d3-llm-only-r3-llm10",
+  "workload": "llm",
+  "args": {
+    "cmd": "run",
+    "workload": "llm",
+    "rate": 10.0,
+    "concurrency": null,
+    "arrival": "poisson",
+    "duration": 45.0,
+    "warmup": 10.0,
+    "target": "http://gateway:8000",
+    "timeout": 120,
+    "max_inflight": 1000,
+    "seed": 44,
+    "name": "d3-llm-only-r3-llm10",
+    "out": "results/d3/llm-only/rep3/llm10_cv0/llm",
+    "env_file": ".env",
+    "input_words": 64,
+    "max_tokens": 128,
+    "fixed_output": true,
+    "images": "data/val2017",
+    "num_images": 200
+  },
+  "git_commit": "74b779b",
+  "host": "0287bee832b3",
+  "python": "3.11.18",
+  "env_file_copied": true,
+  "start_unix": 1794215095.6033735,
+  "measure_start_unix": 1794215105.6033735,
+  "end_unix": 1794215154.1335292,
+  "interrupted": false
+}
