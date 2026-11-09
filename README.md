@@ -74,6 +74,33 @@ make summary RUNS="results/baseline-llm-r2 results/baseline-cv-r10"
 
 `python -m loadgen --help`로 전체 옵션을 볼 수 있습니다.
 
+## 실험 실행과 분석
+
+여러 조건을 한 번에 돌리는 실행기(`experiments/run.py`, 표준 라이브러리만 사용)와 분석 스크립트(`analysis/report.py`)가 있습니다.
+
+| 시나리오 | 내용 |
+| --- | --- |
+| `llm-only` | LLM만, 도착률을 단계적으로 올림 (`--llm-rates`) |
+| `cv-only` | CV만, 도착률을 단계적으로 올림 (`--cv-rates`) |
+| `mixed-cv-sweep` | LLM을 `--llm-fixed`로 고정하고 CV를 올림 → CV가 LLM에 주는 영향 |
+| `mixed-llm-sweep` | CV를 `--cv-fixed`로 고정하고 LLM을 올림 → LLM이 CV에 주는 영향 |
+
+```bash
+# EC2 (SSH가 끊겨도 계속 돌도록 tmux 안에서)
+make exp-pilot EXP=d3            # 시험 실행 약 12분 → results/d3-pilot/
+make exp EXP=d3                  # 본 실험: 3회 반복, 약 80분 → results/d3/
+make exp EXP=d3 ARGS="--llm-rates 1,2,4,8 --llm-fixed 2 --repeat 2"   # 조건 변경
+
+# Mac (결과를 가져온 뒤)
+uv pip install -r analysis/requirements.txt
+make report EXP=d3               # results/d3/report/ 에 표·그래프·report.md
+```
+
+- 단계마다 부하 생성기 결과와 함께, 측정 구간의 GPU 사용률·호스트 CPU·서버 내부 대기 등을 Prometheus에서 읽어 `resources.json`으로 저장
+- 실행 조건(`plan.json`: 옵션, 커밋, GPU)과 당시 `.env`를 결과 폴더에 함께 저장
+- 처리량은 "측정 구간 안에 끝난 요청 수"로 계산 (과부하에서 줄이 길어지는 것을 숨기지 않도록)
+- `report.md`가 처리량이 떨어지거나 지연 p95가 3배 넘게 뛰는 첫 도착률을 자동으로 표시
+
 ## API
 
 | 메서드 | 경로 | 설명 |

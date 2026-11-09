@@ -1,0 +1,3 @@
+# 실험 결과 분석용 (Mac 가상환경에서: uv pip install -r analysis/requirements.txt)
+pandas>=2.2
+matplotlib>=3.8

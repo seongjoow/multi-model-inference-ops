@@ -17,9 +17,10 @@ DURATION ?= 60
 NAME     ?=
 ARGS     ?=
 IMG      ?= data/val2017/000000000139.jpg
+EXP      ?= d3
 export GIT_COMMIT := $(shell git describe --always --dirty 2>/dev/null || echo unknown)
 
-.PHONY: help env llm-mac up down logs ps smoke dash load-llm load-cv load summary gpu-up gpu-down gpu-logs gpu-ps
+.PHONY: help env llm-mac up down logs ps smoke dash load-llm load-cv load summary exp-pilot exp report gpu-up gpu-down gpu-logs gpu-ps
 
 help: ## 명령 목록
 	@echo "현재 환경: $(PLATFORM)"
@@ -65,6 +66,15 @@ load: env ## 부하 생성기에 옵션을 직접 전달 (ARGS="run --workload c
 
 summary: ## 결과 비교표 (RUNS="results/a results/b", 생략하면 전체)
 	$(LOADGEN) summary $(or $(RUNS),$(sort $(wildcard results/*)))
+
+exp-pilot: env ## [EC2] 실험 시험 실행 (약 12분). 도착률 범위가 맞는지 먼저 확인 (EXP=이름, ARGS=추가 옵션)
+	python3 experiments/run.py --name $(EXP)-pilot --repeat 1 --duration 20 --warmup 5 --cooldown 5 $(ARGS)
+
+exp: env ## [EC2] 본 실험 (기본 3회 반복, 약 80분). ARGS="--llm-rates 1,2,4,8 --cv-rates 10,25,50" 처럼 변경
+	python3 experiments/run.py --name $(EXP) $(ARGS)
+
+report: ## [Mac] 실험 결과 분석 → results/<EXP>/report/ (표, 그래프, report.md)
+	python analysis/report.py results/$(EXP)
 
 gpu-up: env ## [EC2] GPU 구성 실행 (make up 과 같음)
 	$(COMPOSE_GPU) up -d --build

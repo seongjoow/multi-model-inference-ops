@@ -325,7 +325,7 @@
             "uid": "prometheus"
           },
           "expr": "gateway_llm_inflight",
-          "legendFormat": "게이트웨이→서버 처리 중",
+          "legendFormat": "게이트웨이가 보낸 요청 (서버 처리+대기)",
           "range": true
         },
         {
