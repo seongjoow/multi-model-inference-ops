@@ -19,6 +19,7 @@ ARGS     ?=
 IMG      ?= data/val2017/000000000139.jpg
 EXP      ?= d3
 export GIT_COMMIT := $(shell git describe --always --dirty 2>/dev/null || echo unknown)
+PYTHON   ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
 .PHONY: help env llm-mac up down logs ps smoke dash load-llm load-cv load summary exp-pilot exp report gpu-up gpu-down gpu-logs gpu-ps
 
@@ -74,7 +75,7 @@ exp: env ## [EC2] 본 실험 (기본 3회 반복, 약 80분). ARGS="--llm-rates 
 	python3 experiments/run.py --name $(EXP) $(ARGS)
 
 report: ## [Mac] 실험 결과 분석 → results/<EXP>/report/ (표, 그래프, report.md)
-	python analysis/report.py results/$(EXP)
+	$(PYTHON) analysis/report.py results/$(EXP)
 
 gpu-up: env ## [EC2] GPU 구성 실행 (make up 과 같음)
 	$(COMPOSE_GPU) up -d --build

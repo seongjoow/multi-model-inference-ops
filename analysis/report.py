@@ -98,6 +98,8 @@ def workload_stats(run_dir: Path, prefix: str, duration: float) -> dict:
             "inference_p50_ms": q(ok["cv_inference_ms"], 50), "decode_p50_ms": q(ok["cv_decode_ms"], 50),
             "batch_size_mean": mean(ok["cv_batch_size"]),
         })
+    bad = m[m["status"].astype(str) != "200"]["status"].astype(str).value_counts()
+    s["non200"] = ", ".join(f"{k}×{v}" for k, v in bad.items())
     return {f"{prefix}_{k}": v for k, v in s.items()}
 
 
@@ -328,21 +330,22 @@ def write_report(cond: pd.DataFrame, runs: pd.DataFrame, plan: dict, figs: list[
     if not d.empty:
         lines += ["## LLM 단독", "", knee(d, "llm_rate", "llm", "llm_ttft_p95_ms", "TTFT p95"), "", md_table(
             ["도착률 (req/s)", "처리량", "TTFT p50 (ms)", "TTFT p95 (ms)", "TPOT p50 (ms)", "e2e p95 (ms)",
-             "에러율", "GPU %", "호스트 CPU %", "서버 내부 대기 최대"],
+             "에러율", "GPU %", "호스트 CPU %", "서버 처리 중 최대", "서버 내부 대기 최대", "KV cache 최대 %"],
             [[fmt(r["llm_rate"], 1), rng(r, "llm_achieved_rps", digits=2), rng(r, "llm_ttft_p50_ms"),
               rng(r, "llm_ttft_p95_ms"), rng(r, "llm_tpot_p50_ms", digits=1), rng(r, "llm_latency_p95_ms"),
               fmt(r.get("llm_error_rate"), 3), rng(r, "res_gpu_util_pct_mean"), rng(r, "res_host_cpu_pct_mean"),
-              fmt(r.get("res_llm_server_waiting_max"))] for _, r in d.sort_values("llm_rate").iterrows()]), ""]
+              fmt(r.get("res_llm_server_running_max")), fmt(r.get("res_llm_server_waiting_max")),
+              fmt(r.get("res_llm_kv_cache_pct_max"), 1)] for _, r in d.sort_values("llm_rate").iterrows()]), ""]
     d = cond[cond["scenario"] == "cv-only"]
     if not d.empty:
         lines += ["## CV 단독", "", knee(d, "cv_rate", "cv", "cv_latency_p95_ms", "전체 지연 p95"), "", md_table(
             ["도착률 (req/s)", "처리량", "p50 (ms)", "p95 (ms)", "p99 (ms)", "큐 대기 p95 (ms)", "추론 p50 (ms)",
-             "평균 배치", "에러율", "GPU %", "호스트 CPU %"],
+             "해독 p50 (ms)", "평균 배치", "에러율", "GPU %", "호스트 CPU %"],
             [[fmt(r["cv_rate"], 1), rng(r, "cv_achieved_rps", digits=2), rng(r, "cv_latency_p50_ms"),
               rng(r, "cv_latency_p95_ms"), rng(r, "cv_latency_p99_ms"), rng(r, "cv_queue_wait_p95_ms"),
-              rng(r, "cv_inference_p50_ms", digits=1), rng(r, "cv_batch_size_mean", digits=2),
-              fmt(r.get("cv_error_rate"), 3), rng(r, "res_gpu_util_pct_mean"), rng(r, "res_host_cpu_pct_mean")]
-             for _, r in d.sort_values("cv_rate").iterrows()]), ""]
+              rng(r, "cv_inference_p50_ms", digits=1), rng(r, "cv_decode_p50_ms", digits=1),
+              rng(r, "cv_batch_size_mean", digits=2), fmt(r.get("cv_error_rate"), 3), rng(r, "res_gpu_util_pct_mean"),
+              rng(r, "res_host_cpu_pct_mean")] for _, r in d.sort_values("cv_rate").iterrows()]), ""]
     d = cond[cond["scenario"] == "mixed-cv-sweep"]
     if not d.empty:
         base = cond[(cond["scenario"] == "llm-only") & (cond["llm_rate"] == float(a["llm_fixed"]))]
@@ -350,13 +353,15 @@ def write_report(cond: pd.DataFrame, runs: pd.DataFrame, plan: dict, figs: list[
         if not base.empty:
             b = base.iloc[0]
             rows.append(["0 (LLM 단독)", rng(b, "llm_ttft_p95_ms"), rng(b, "llm_tpot_p50_ms", digits=1),
-                         rng(b, "llm_latency_p95_ms"), "-", rng(b, "res_gpu_util_pct_mean"), rng(b, "res_host_cpu_pct_mean")])
+                         rng(b, "llm_latency_p95_ms"), "-", "-", "-", rng(b, "res_gpu_util_pct_mean"),
+                         rng(b, "res_host_cpu_pct_mean")])
         rows += [[fmt(r["cv_rate"], 1), rng(r, "llm_ttft_p95_ms"), rng(r, "llm_tpot_p50_ms", digits=1),
-                  rng(r, "llm_latency_p95_ms"), rng(r, "cv_latency_p95_ms"), rng(r, "res_gpu_util_pct_mean"),
-                  rng(r, "res_host_cpu_pct_mean")] for _, r in d.sort_values("cv_rate").iterrows()]
+                  rng(r, "llm_latency_p95_ms"), rng(r, "cv_achieved_rps", digits=2), rng(r, "cv_latency_p95_ms"),
+                  fmt(r.get("cv_error_rate"), 3), rng(r, "res_gpu_util_pct_mean"), rng(r, "res_host_cpu_pct_mean")]
+                 for _, r in d.sort_values("cv_rate").iterrows()]
         lines += [f"## 경합: LLM {float(a['llm_fixed']):g} req/s 고정 + CV 증가", "", md_table(
-            ["CV 도착률", "LLM TTFT p95 (ms)", "LLM TPOT p50 (ms)", "LLM e2e p95 (ms)", "CV p95 (ms)", "GPU %",
-             "호스트 CPU %"], rows), ""]
+            ["CV 도착률", "LLM TTFT p95 (ms)", "LLM TPOT p50 (ms)", "LLM e2e p95 (ms)", "CV 처리량", "CV p95 (ms)",
+             "CV 에러율", "GPU %", "호스트 CPU %"], rows), ""]
     d = cond[cond["scenario"] == "mixed-llm-sweep"]
     if not d.empty:
         base = cond[(cond["scenario"] == "cv-only") & (cond["cv_rate"] == float(a["cv_fixed"]))]
@@ -364,13 +369,28 @@ def write_report(cond: pd.DataFrame, runs: pd.DataFrame, plan: dict, figs: list[
         if not base.empty:
             b = base.iloc[0]
             rows.append(["0 (CV 단독)", rng(b, "cv_latency_p95_ms"), rng(b, "cv_inference_p50_ms", digits=1),
-                         rng(b, "cv_queue_wait_p95_ms"), "-", rng(b, "res_gpu_util_pct_mean"), rng(b, "res_host_cpu_pct_mean")])
+                         rng(b, "cv_decode_p50_ms", digits=1), rng(b, "cv_queue_wait_p95_ms"),
+                         fmt(b.get("cv_error_rate"), 3), "-", "-", rng(b, "res_gpu_util_pct_mean"),
+                         rng(b, "res_host_cpu_pct_mean")])
         rows += [[fmt(r["llm_rate"], 1), rng(r, "cv_latency_p95_ms"), rng(r, "cv_inference_p50_ms", digits=1),
-                  rng(r, "cv_queue_wait_p95_ms"), rng(r, "llm_ttft_p95_ms"), rng(r, "res_gpu_util_pct_mean"),
+                  rng(r, "cv_decode_p50_ms", digits=1), rng(r, "cv_queue_wait_p95_ms"), fmt(r.get("cv_error_rate"), 3),
+                  rng(r, "llm_ttft_p95_ms"), rng(r, "llm_achieved_rps", digits=2), rng(r, "res_gpu_util_pct_mean"),
                   rng(r, "res_host_cpu_pct_mean")] for _, r in d.sort_values("llm_rate").iterrows()]
         lines += [f"## 경합: CV {float(a['cv_fixed']):g} req/s 고정 + LLM 증가", "", md_table(
-            ["LLM 도착률", "CV p95 (ms)", "CV 추론 p50 (ms)", "CV 큐 대기 p95 (ms)", "LLM TTFT p95 (ms)", "GPU %",
-             "호스트 CPU %"], rows), ""]
+            ["LLM 도착률", "CV p95 (ms)", "CV 추론 p50 (ms)", "CV 해독 p50 (ms)", "CV 큐 대기 p95 (ms)", "CV 에러율",
+             "LLM TTFT p95 (ms)", "LLM 처리량", "GPU %", "호스트 CPU %"], rows), ""]
+    failed = []
+    for _, r in runs.iterrows():
+        for w in ("llm", "cv"):
+            v = r.get(f"{w}_non200")
+            if isinstance(v, str) and v:
+                failed.append([r["scenario"], str(r["rep"]), fmt(r.get("llm_rate"), 1), fmt(r.get("cv_rate"), 1),
+                               w.upper(), v])
+    if failed:
+        lines += ["## 200이 아닌 응답이 있었던 단계", "",
+                  "측정 구간에 보낸 요청 중 실패한 것의 상태별 건수입니다. 504는 게이트웨이가 CV 결과를 기다리다 한도"
+                  "(`CV_WAIT_TIMEOUT_S`)를 넘긴 것, 503은 LLM 동시성 대기 한도를 넘긴 것, timeout은 부하 생성기 쪽 한도입니다.",
+                  "", md_table(["시나리오", "회차", "LLM 도착률", "CV 도착률", "워크로드", "상태별 건수"], failed), ""]
     lag = pd.concat([runs.get("llm_send_lag_p99_ms", pd.Series(dtype=float)),
                      runs.get("cv_send_lag_p99_ms", pd.Series(dtype=float))]).dropna()
     if len(lag) and lag.max() > 50:

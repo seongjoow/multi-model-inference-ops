@@ -86,7 +86,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -159,7 +159,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -222,7 +222,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -285,7 +285,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -368,7 +368,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -421,7 +421,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -474,7 +474,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           },
           "max": 1
         },
@@ -541,7 +541,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -614,7 +614,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -697,7 +697,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -780,7 +780,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -833,7 +833,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -886,7 +886,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -962,7 +962,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           },
           "max": 100
         },
@@ -1036,7 +1036,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1099,7 +1099,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           },
           "max": 1
         },
@@ -1153,7 +1153,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1206,7 +1206,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1269,7 +1269,7 @@
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
