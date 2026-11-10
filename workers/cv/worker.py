@@ -114,20 +114,35 @@ class Worker:
 
         pipe = self.r.pipeline(transaction=False)
         for job_id, _ in batch:
-            pipe.hmget(keys.job(job_id), "image", "enqueued_at", "request_id")
+            pipe.hmget(keys.job(job_id), "image", "enqueued_at", "request_id", "deadline")
         rows = pipe.execute()
 
         jobs: list[Job] = []
         missing: list[str] = []
-        for (job_id, popped_at), (image, enqueued_at, request_id) in zip(batch, rows):
+        expired: list[tuple[str, str]] = []
+        for (job_id, popped_at), (image, enqueued_at, request_id, deadline) in zip(batch, rows):
             if image is None:  # TTL 만료 등으로 본문이 없는 작업
                 missing.append(job_id)
+                continue
+            if deadline is not None and t_start > float(deadline):
+                # 게이트웨이가 이미 시간 초과(504)로 응답한 작업. 추론해도 받을 사람이 없으니 건너뛴다
+                expired.append((job_id, (request_id or b"").decode()))
                 continue
             jobs.append(Job(job_id, image, float(enqueued_at), (request_id or b"").decode(), popped_at))
         if missing:
             self.queue.ack(missing)
             m.JOBS.labels("missing").inc(len(missing))
             log_event(log, "jobs_missing", logging.WARNING, job_ids=missing)
+        if expired:
+            pipe = self.r.pipeline(transaction=False)
+            for job_id, _ in expired:
+                pipe.hset(keys.job(job_id), mapping={"status": "expired", "finished_at": repr(time.time())})
+                pipe.hdel(keys.job(job_id), "image")
+            pipe.execute()
+            self.queue.ack([job_id for job_id, _ in expired])
+            m.JOBS.labels("expired").inc(len(expired))
+            log_event(log, "jobs_expired", logging.WARNING, count=len(expired),
+                      request_ids=[rid for _, rid in expired][:20])
 
         pipe = self.r.pipeline(transaction=False)
         for job in jobs:

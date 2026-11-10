@@ -1,0 +1,67 @@
+# 경보 규칙. Prometheus 화면(http://localhost:9090) > Alerts 에서 상태(inactive / pending / firing)를 본다.
+# 기준값은 SLO 후보(LLM TTFT p95 ≤ 1초, CV p95 ≤ 500 ms, 실패율 ≤ 1%)와 D3 본 실험 결과에서 정했다.
+# 이 환경에는 알림을 보내는 Alertmanager가 없다. 운영이라면 Alertmanager로 Slack·메일에 연결한다.
+groups:
+  - name: cv-worker
+    rules:
+      - alert: CVWorkerDown
+        # 워커가 1초마다 갱신하는 heartbeat 키(TTL 15초)가 하나도 없음 = 큐를 처리할 워커가 없다
+        expr: max(cv_workers_alive) == 0
+        for: 10s
+        labels: {severity: critical}
+        annotations:
+          summary: "CV 워커가 하나도 살아 있지 않음"
+          action: "docker compose ps cv-worker 로 상태 확인, 워커 로그 확인 후 재시작"
+
+      - alert: CVWorkerRestarted
+        # 워커가 TTL(15초)보다 빨리 다시 뜨면 위 경보는 울리지 않는다. 카운터가 0으로 돌아간 것으로 재시작을 잡는다
+        expr: sum(resets(cv_worker_jobs_total[2m])) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "CV 워커 프로세스가 최근 2분 안에 재시작됨"
+          action: "워커 로그에서 종료 원인(OOM, 예외) 확인. simple 큐 모드면 처리 중이던 작업이 유실됐을 수 있음"
+
+      - alert: CVQueueBacklog
+        # 큐가 길고 계속 늘어나는 중 = 들어오는 양이 처리 능력보다 많다 (워커 장애 또는 과부하)
+        expr: max(cv_queue_depth) > 50 and deriv(max(cv_queue_depth)[30s:2s]) > 0
+        for: 10s
+        labels: {severity: warning}
+        annotations:
+          summary: "CV 큐가 {{ $value }}개 넘게 쌓이며 늘어나는 중"
+          action: "워커 상태와 처리 속도 확인. 과부하면 CV_MAX_QUEUE로 거절하거나 워커를 늘림"
+
+      - alert: CVDeadLetters
+        expr: max(cv_dlq_depth) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "재시도 한도를 넘긴 CV 작업이 DLQ에 있음"
+          action: "redis-cli LRANGE cv:dlq 0 -1 로 작업 확인 후 원인(손상된 이미지, 반복 장애) 조사"
+
+  - name: slo
+    rules:
+      - alert: CVLatencySLO
+        expr: histogram_quantile(0.95, sum by (le) (rate(gateway_cv_e2e_seconds_bucket[1m]))) > 0.5
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: "CV p95 지연이 SLO(500 ms)를 넘음"
+          action: "Grafana CV 단계별 시간에서 큐 대기·추론·해독 중 어디가 늘었는지 확인"
+
+      - alert: CVFailureRate
+        # 429(설계된 거절)는 빼고, 5xx만 실패로 센다
+        expr: |
+          sum(rate(gateway_requests_total{workload="cv", status=~"5.."}[1m]))
+            / sum(rate(gateway_requests_total{workload="cv"}[1m])) > 0.01
+        for: 30s
+        labels: {severity: critical}
+        annotations:
+          summary: "CV 요청의 1% 넘게 5xx로 실패 중"
+          action: "504면 워커 장애·적체, 503이면 Redis 연결 부족(과부하), 500이면 게이트웨이 로그 확인"
+
+      - alert: LLMTTFTSLO
+        expr: histogram_quantile(0.95, sum by (le) (rate(gateway_llm_ttft_seconds_bucket[1m]))) > 1
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: "LLM 첫 토큰 p95가 SLO(1초)를 넘음"
+          action: "vLLM 처리 중 요청 수가 VLLM_MAX_NUM_SEQS에 붙었는지, CV 경합이 있는지 확인"

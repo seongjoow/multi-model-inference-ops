@@ -7,8 +7,9 @@
 시나리오 (--scenarios 로 고름)
   llm-only        LLM만, --llm-rates 의 각 도착률
   cv-only         CV만, --cv-rates 의 각 도착률
-  mixed-cv-sweep  LLM을 --llm-fixed 로 고정하고 CV를 --cv-rates 로 올림 → CV가 LLM에 주는 영향
-  mixed-llm-sweep CV를 --cv-fixed 로 고정하고 LLM을 --llm-rates 로 올림 → LLM이 CV에 주는 영향
+  contention-cv-sweep   LLM을 --llm-fixed 로 고정하고 CV를 --cv-rates 로 올림 → CV가 LLM에 주는 영향
+  contention-llm-sweep  CV를 --cv-fixed 로 고정하고 LLM을 --llm-rates 로 올림 → LLM이 CV에 주는 영향
+  (예전 이름 mixed-cv-sweep, mixed-llm-sweep 도 받아서 새 이름으로 바꿔 실행한다)
 
 결과: results/<name>/
   plan.json, env.txt            실행 조건 (옵션, 커밋, GPU, 당시 .env)
@@ -38,7 +39,9 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SCENARIOS = ["llm-only", "cv-only", "mixed-cv-sweep", "mixed-llm-sweep"]
+SCENARIOS = ["llm-only", "cv-only", "contention-cv-sweep", "contention-llm-sweep"]
+# d3까지 쓰던 이름. 분석(report.py)도 같은 표로 옛 결과를 새 이름으로 읽는다
+SCENARIO_ALIASES = {"mixed-cv-sweep": "contention-cv-sweep", "mixed-llm-sweep": "contention-llm-sweep"}
 
 # 측정 구간 동안 Prometheus에서 평균·최대를 뽑을 지표
 RESOURCE_QUERIES = {
@@ -106,7 +109,7 @@ def build_steps(args: argparse.Namespace) -> list[dict]:
                 pairs = [(r, None) for r in args.llm_rates]
             elif sc == "cv-only":
                 pairs = [(None, r) for r in args.cv_rates]
-            elif sc == "mixed-cv-sweep":
+            elif sc == "contention-cv-sweep":
                 pairs = [(args.llm_fixed, r) for r in args.cv_rates]
             else:
                 pairs = [(r, args.cv_fixed) for r in args.llm_rates]
@@ -186,8 +189,8 @@ def main() -> int:
     p.add_argument("--scenarios", default=",".join(SCENARIOS), help=f"쉼표로 구분: {','.join(SCENARIOS)}")
     p.add_argument("--llm-rates", default="1,2,4,8,12", help="LLM 도착률 단계 (req/s)")
     p.add_argument("--cv-rates", default="10,25,50,100", help="CV 도착률 단계 (req/s)")
-    p.add_argument("--llm-fixed", type=float, default=4, help="mixed-cv-sweep 에서 고정할 LLM 도착률")
-    p.add_argument("--cv-fixed", type=float, default=25, help="mixed-llm-sweep 에서 고정할 CV 도착률")
+    p.add_argument("--llm-fixed", type=float, default=4, help="contention-cv-sweep 에서 고정할 LLM 도착률")
+    p.add_argument("--cv-fixed", type=float, default=25, help="contention-llm-sweep 에서 고정할 CV 도착률")
     p.add_argument("--repeat", type=int, default=3, help="전체 반복 횟수")
     p.add_argument("--duration", type=float, default=60, help="단계별 측정 구간(초)")
     p.add_argument("--warmup", type=float, default=10, help="단계별 워밍업(초)")
@@ -203,7 +206,7 @@ def main() -> int:
     p.add_argument("--grafana", default="http://localhost:3000")
     p.add_argument("--yes", action="store_true", help="시작 전 확인 없이 바로 실행")
     args = p.parse_args()
-    args.scenarios = [s for s in args.scenarios.split(",") if s]
+    args.scenarios = list(dict.fromkeys(SCENARIO_ALIASES.get(s, s) for s in args.scenarios.split(",") if s))
     bad = [s for s in args.scenarios if s not in SCENARIOS]
     if bad:
         p.error(f"모르는 시나리오: {bad}")

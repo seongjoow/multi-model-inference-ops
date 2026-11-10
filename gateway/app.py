@@ -21,6 +21,8 @@ import redis.asyncio as aioredis
 from fastapi import FastAPI, File, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from common import keys
 from common.jsonlog import log_event, setup_logging
@@ -30,6 +32,9 @@ from gateway.settings import Settings
 settings = Settings.from_env()
 setup_logging("gateway", settings.log_level)
 log = logging.getLogger("gateway")
+
+
+CV_WAIT_MAX_S = 600  # wait=true 요청이 정할 수 있는 최대 대기 (timeout 쿼리 상한과 같음)
 
 
 def _ms(seconds: float) -> float:
@@ -45,10 +50,22 @@ def _request_id(request: Request) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 일반 명령(LLEN, 작업 등록 등)용. redis-py 8.x 기본값대로 소켓 읽기 한도 5초.
     pool = aioredis.BlockingConnectionPool.from_url(
         settings.redis_url, max_connections=settings.redis_max_connections, timeout=5
     )
     app.state.redis = aioredis.Redis(connection_pool=pool)
+    # 결과 대기(BLPOP) 전용. redis-py 8.x는 socket_timeout 기본값이 5초라, 결과를 최대 CV_WAIT_TIMEOUT_S 동안
+    # 기다려야 하는 BLPOP이 5초에 TimeoutError로 끊긴다 (D3 본 실험에서 CV 과부하 때 나온 500의 원인).
+    # 그래서 기다리는 연결은 읽기 한도를 최대 대기 시간보다 길게 둔다.
+    wait_pool = aioredis.BlockingConnectionPool.from_url(
+        settings.redis_url,
+        max_connections=settings.redis_max_connections,
+        timeout=5,
+        socket_timeout=CV_WAIT_MAX_S + 5,
+        socket_connect_timeout=5,
+    )
+    app.state.redis_wait = aioredis.Redis(connection_pool=wait_pool)
     app.state.http = httpx.AsyncClient(
         base_url=settings.llm_base_url,
         timeout=httpx.Timeout(settings.llm_request_timeout_s, connect=5.0),
@@ -70,9 +87,27 @@ async def lifespan(app: FastAPI):
         poller.cancel()
         await app.state.http.aclose()
         await app.state.redis.aclose()
+        await app.state.redis_wait.aclose()
 
 
 app = FastAPI(title="multi-model-inference-ops gateway", lifespan=lifespan)
+
+
+@app.exception_handler(RedisConnectionError)
+@app.exception_handler(RedisTimeoutError)
+async def _redis_unavailable(request: Request, exc: Exception) -> JSONResponse:
+    """Redis 연결을 못 얻거나 응답이 늦으면(연결 풀 고갈, Redis 장애·지연) 500 대신 503 + Retry-After.
+
+    처리되지 않은 예외는 500이 되어 "서버 버그"와 구분되지 않는다. 일시적인 과부하·장애이므로
+    "잠시 후 다시"라는 뜻의 503으로 돌려주고, 로그(redis_unavailable)와 지표에서 따로 셀 수 있게 한다.
+    """
+    rid = _request_id(request)
+    workload = "cv" if request.url.path.startswith("/v1/cv") else "llm" if request.url.path.startswith("/v1/llm") else "other"
+    m.REQUESTS.labels(workload, "503").inc()
+    log_event(log, "redis_unavailable", logging.WARNING, request_id=rid, path=request.url.path, error=repr(exc))
+    resp = _json_error(503, "temporarily unavailable: redis connection", rid)
+    resp.headers["Retry-After"] = "1"
+    return resp
 
 
 async def _poll_queue_stats(r: aioredis.Redis) -> None:
@@ -387,17 +422,21 @@ async def cv_detect(
         return _json_error(400, "empty image", rid)
 
     job_id = uuid.uuid4().hex
+    wait_s = min(timeout or settings.cv_wait_timeout_s, CV_WAIT_MAX_S)
+    now = time.time()
+    fields: dict[str, Any] = {
+        "image": data,
+        "status": "queued",
+        "enqueued_at": repr(now),
+        "request_id": rid,
+        "size": len(data),
+    }
+    if wait:
+        # 이 시각이 지나면 게이트웨이는 이미 504를 돌려줬으므로 결과를 받을 사람이 없다.
+        # 워커는 마감이 지난 작업을 추론하지 않고 건너뛴다 ('주인 없는 작업'에 GPU를 쓰지 않도록).
+        fields["deadline"] = repr(now + wait_s)
     async with r.pipeline(transaction=True) as pipe:
-        pipe.hset(
-            keys.job(job_id),
-            mapping={
-                "image": data,
-                "status": "queued",
-                "enqueued_at": repr(time.time()),
-                "request_id": rid,
-                "size": len(data),
-            },
-        )
+        pipe.hset(keys.job(job_id), mapping=fields)
         pipe.expire(keys.job(job_id), settings.cv_job_ttl_s)
         pipe.rpush(keys.QUEUE, job_id)
         await pipe.execute()
@@ -408,7 +447,7 @@ async def cv_detect(
         log_event(log, "cv_enqueued", request_id=rid, job_id=job_id, size=len(data), queue_depth=depth + 1)
         return JSONResponse({"job_id": job_id, "status": "queued", "request_id": rid}, status_code=202, headers=headers)
 
-    popped = await r.blpop([keys.result(job_id)], timeout=timeout or settings.cv_wait_timeout_s)
+    popped = await request.app.state.redis_wait.blpop([keys.result(job_id)], timeout=wait_s)
     e2e = time.perf_counter() - t0
     if popped is None:
         m.REQUESTS.labels("cv", "504").inc()

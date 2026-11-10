@@ -51,6 +51,8 @@ services:
       CV_MODEL_DIR: /models
     volumes:
       - ./models:/models # 가중치를 호스트에 캐시 (없으면 첫 실행 때 내려받음)
+    deploy:
+      replicas: ${CV_WORKERS:-1} # 워커 수 (.env). 2면 해독·추론을 두 프로세스가 나눠 함
     depends_on:
       redis:
         condition: service_healthy
@@ -71,6 +73,7 @@ services:
       - --storage.tsdb.retention.time=15d
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro # 경보 규칙 (Prometheus > Alerts)
       - ./monitoring/prometheus/scrape/llm-mac.yml:/etc/prometheus/scrape/llm.yml:ro # EC2에선 gpu.yml이 교체
       - prometheus-data:/prometheus
     ports: ["127.0.0.1:9090:9090"]

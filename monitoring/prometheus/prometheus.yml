@@ -4,6 +4,10 @@ global:
   scrape_interval: 2s
   evaluation_interval: 2s
 
+# 경보 규칙: SLO 위반, 워커 장애, 큐 적체. Prometheus 화면의 Alerts 탭에서 상태를 본다.
+rule_files:
+  - /etc/prometheus/alerts.yml
+
 # 환경마다 다른 대상은 scrape/ 아래 파일로 나눈다.
 # Mac: llm.yml = llama.cpp(호스트) / EC2: llm.yml = vLLM + gpu-host.yml(GPU, 호스트 CPU·메모리)
 scrape_config_files:

@@ -8,6 +8,7 @@ data/
 *.pt
 *.onnx
 *.zip
+.env.bak
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

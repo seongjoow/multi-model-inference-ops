@@ -82,8 +82,10 @@ make summary RUNS="results/baseline-llm-r2 results/baseline-cv-r10"
 | --- | --- |
 | `llm-only` | LLM만, 도착률을 단계적으로 올림 (`--llm-rates`) |
 | `cv-only` | CV만, 도착률을 단계적으로 올림 (`--cv-rates`) |
-| `mixed-cv-sweep` | LLM을 `--llm-fixed`로 고정하고 CV를 올림 → CV가 LLM에 주는 영향 |
-| `mixed-llm-sweep` | CV를 `--cv-fixed`로 고정하고 LLM을 올림 → LLM이 CV에 주는 영향 |
+| `contention-cv-sweep` | LLM을 `--llm-fixed`로 고정하고 CV를 올림 → CV가 LLM에 주는 영향 |
+| `contention-llm-sweep` | CV를 `--cv-fixed`로 고정하고 LLM을 올림 → LLM이 CV에 주는 영향 |
+
+D3까지는 경합 시나리오를 `mixed-cv-sweep`, `mixed-llm-sweep`이라 불렀습니다. 실행기는 옛 이름도 받아서 새 이름으로 바꿔 실행하고, 분석 스크립트는 옛 결과를 새 이름으로 읽습니다.
 
 ```bash
 # EC2 (SSH가 끊겨도 계속 돌도록 tmux 안에서)
@@ -98,8 +100,54 @@ make report EXP=d3               # results/d3/report/ 에 표·그래프·report
 
 - 단계마다 부하 생성기 결과와 함께, 측정 구간의 GPU 사용률·호스트 CPU·서버 내부 대기 등을 Prometheus에서 읽어 `resources.json`으로 저장
 - 실행 조건(`plan.json`: 옵션, 커밋, GPU)과 당시 `.env`를 결과 폴더에 함께 저장
-- 처리량은 "측정 구간 안에 끝난 요청 수"로 계산 (과부하에서 줄이 길어지는 것을 숨기지 않도록)
+- 처리량은 "측정 구간 안에 끝난 요청 수"로, goodput은 그중 SLO까지 지킨 요청 수로 계산 (과부하에서 줄이 길어지는 것을 숨기지 않도록)
 - `report.md`가 처리량이 떨어지거나 지연 p95가 3배 넘게 뛰는 첫 도착률을 자동으로 표시
+- 부하 생성기가 요청을 다 보내지 못한(dropped) 단계나 200 ms 넘게 늦게 보낸 단계는 † 로 표시하고 따로 모아 보여 줌
+- "게이트웨이 밖에서 쓴 시간"(클라이언트 지연 − 게이트웨이 지연)과 게이트웨이 CPU를 나란히 보여 줘, 게이트웨이 자체가 병목인지 확인
+- CV 추론·디코딩 시간은 배치당과 이미지당(요청마다 배치 시간 ÷ 배치 크기)을 함께 보여 줌. 배치 크기를 바꾸는 실험은 이미지당으로 비교
+- LLM은 출력 토큰 처리량(tok/s, 측정 구간 안에 끝난 요청 기준)을 함께 보여 줌
+
+### 설정을 바꿔 가며 비교하기 (최적화 전후)
+
+실험 조건은 `experiments/conf/<이름>.env` 파일로 남깁니다. `make use`는 실험용 값을 기준(`base.env`, D3 본 실험과 같은 값)으로 되돌린 뒤 그 파일의 값만 덮어쓰고, 컨테이너를 다시 띄우고, 준비될 때까지 기다립니다. 적용한 이름은 `.env`의 `EXP_CONF`로 남아 결과의 `env.txt`에도 기록됩니다.
+
+```bash
+make confs                                   # 설정 목록과 각 설정의 가설
+A="--scenarios contention-cv-sweep --llm-fixed 4 --cv-rates 25,40,50,75,100 --duration 45 --yes"
+make use CONF=base         && make exp EXP=e2-base     ARGS="$A"
+make use CONF=e2a-batch16  && make exp EXP=e2a-batch16 ARGS="$A"
+
+# Mac
+make compare EXPS="e2-base e2a-batch16"      # → results/compare/<이름들>/compare.md, 그래프
+```
+
+`compare.md`에는 실험마다 달랐던 `.env` 값, 실험별 SLO 용량·최대 goodput, 같은 도착률끼리 나란히 놓은 표가 들어갑니다. 첫 번째 실험이 기준입니다.
+
+| 설정 | 바꾸는 것 | 확인하려는 것 |
+| --- | --- | --- |
+| `e1-seqs64` | `VLLM_MAX_NUM_SEQS` 32 → 64 | LLM 한계가 동시 처리 슬롯 수인가, TPOT를 얼마나 내주는가 |
+| `e2a-batch16` | CV 배치 16, 배치 대기 30 ms | GPU 시분할 대기를 큰 배치가 나눠 내는가 |
+| `e2b-workers2` | CV 워커 2개 (`CV_WORKERS`) | 해독 병렬화와 GPU 차례 확보로 경합 중 용량이 오르는가 |
+| `e3-shed` | `CV_MAX_QUEUE` 10000 → 20 | 넘치는 요청을 일찍 거절(429)해 받아들인 요청의 SLO를 지키는가 |
+| `e4-yolo26` | YOLO11n → YOLO26n | 모델 버전 교체가 추론 시간·용량에 주는 영향 |
+| `e5-reliable` | `CV_QUEUE_MODE=reliable` | 워커 장애 때 작업이 유실되지 않는가 |
+
+### 장애 재현 (워커 장애)
+
+```bash
+make use CONF=base        && make fault-worker NAME=e5-simple      # 60초에 워커 종료, 30초 뒤 수동 재시작
+make use CONF=e5-reliable && make fault-worker NAME=e5-reliable
+make fault-worker NAME=e5-crash MODE=crash                          # 프로세스만 죽여 Docker가 자동 재시작 (sudo)
+
+# Mac
+make fault-report EXPS="e5-simple e5-reliable"   # 유실 의심 요청, 되살린 작업, 적체·회복 시간, 경보 시점 + 시간축 그림
+```
+
+결과 폴더에는 요청별 기록, 사건 시각(`timeline.csv`), 장애 전후의 큐 길이·워커 수·경보(`prometheus.json`), 그 구간의 워커·게이트웨이 로그가 남습니다.
+
+### 경보 규칙
+
+`monitoring/prometheus/alerts.yml`에 워커 장애(`CVWorkerDown`, `CVWorkerRestarted`), 큐 적체(`CVQueueBacklog`), DLQ, SLO 위반(`CVLatencySLO`, `LLMTTFTSLO`), CV 실패율 경보가 있습니다. Prometheus 화면의 Alerts 탭에서 상태를 봅니다. 알림을 보내는 Alertmanager는 붙이지 않았습니다.
 
 ## API
 
@@ -123,6 +171,12 @@ make report EXP=d3               # results/d3/report/ 에 표·그래프·report
 | `CV_MODEL` | `yolo11n.pt` / `yolo26n.pt` (버전 교체 실험) |
 | `VLLM_GPU_MEM_UTIL` | vLLM이 미리 잡는 GPU 메모리 비율 (CV 워커와 VRAM 공유) |
 | `CV_BACKEND=dummy` | 모델 없이 고정 시간만 쓰는 백엔드. 큐·배치 동작만 따로 검증할 때 |
+| `CV_WORKERS` | CV 워커 컨테이너 수 |
+| `CV_MAX_QUEUE` | CV 큐 길이 상한. 넘으면 429로 거절 |
+
+## 알려진 함정: redis-py 8.x의 소켓 읽기 한도
+
+redis-py 8.x는 `socket_timeout` 기본값이 5초입니다. 그래서 결과를 최대 `CV_WAIT_TIMEOUT_S`(60초) 동안 기다리는 BLPOP이 5초에 `TimeoutError`로 끊기고, 처리되지 않은 예외라 500이 됩니다. D3 본 실험의 CV 과부하 구간에서 나온 500이 이 경우로 보입니다. 게이트웨이는 이제 결과 대기 전용 연결 풀을 따로 두고 읽기 한도를 최대 대기 시간보다 길게 잡습니다. Redis 연결 문제는 500 대신 503 + `Retry-After`로 돌려줍니다. 또 결과를 기다리던 요청이 시간 초과(504)로 끝난 작업은 워커가 추론하지 않고 건너뜁니다(`cv_worker_jobs_total{outcome="expired"}`).
 
 ## 사용 내역 및 구현 범위
 

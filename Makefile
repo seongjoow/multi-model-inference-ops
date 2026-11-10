@@ -21,11 +21,11 @@ EXP      ?= d3
 export GIT_COMMIT := $(shell git describe --always --dirty 2>/dev/null || echo unknown)
 PYTHON   ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
-.PHONY: help env llm-mac up down logs ps smoke dash load-llm load-cv load summary exp-pilot exp report gpu-up gpu-down gpu-logs gpu-ps
+.PHONY: help env llm-mac up down logs ps smoke dash load-llm load-cv load summary exp-pilot exp report use confs compare fault-worker fault-report gpu-up gpu-down gpu-logs gpu-ps
 
 help: ## 명령 목록
 	@echo "현재 환경: $(PLATFORM)"
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-13s %s\n", $$1, $$2}'
 
 env: ## .env 가 없으면 .env.example 로 만든다
 	@test -f .env || (cp .env.example .env && echo ".env created")
@@ -76,6 +76,25 @@ exp: env ## [EC2] 본 실험 (기본 3회 반복, 약 80분). ARGS="--llm-rates 
 
 report: ## [Mac] 실험 결과 분석 → results/<EXP>/report/ (표, 그래프, report.md)
 	$(PYTHON) analysis/report.py results/$(EXP)
+
+use: env ## [EC2] 실험 설정 적용 후 재시작·준비 대기 (CONF=e1-seqs64, 목록: make confs)
+	@test -n "$(CONF)" || (echo "CONF=<설정 이름> 이 필요합니다. 목록: make confs"; exit 1)
+	python3 experiments/apply_conf.py $(CONF)
+	$(COMPOSE) up -d --build
+	python3 experiments/apply_conf.py --wait
+
+confs: ## 실험 설정 목록 (experiments/conf/*.env)
+	@python3 experiments/apply_conf.py --list
+
+compare: ## [Mac] 전후 비교 (EXPS="e2-base e2a-batch16", 첫 번째가 기준) → results/compare/...
+	$(PYTHON) analysis/compare.py $(addprefix results/,$(EXPS))
+
+fault-worker: env ## [EC2] 장애 재현: 부하 중 CV 워커 강제 종료 (NAME=e5-simple, MODE=down|crash)
+	@test -n "$(NAME)" || (echo "NAME=<결과 이름> 이 필요합니다"; exit 1)
+	python3 experiments/fault.py --name $(NAME) $(if $(MODE),--mode $(MODE)) $(ARGS)
+
+fault-report: ## [Mac] 장애 재현 분석 (EXPS="e5-simple e5-reliable")
+	$(PYTHON) analysis/fault_report.py $(addprefix results/,$(EXPS))
 
 gpu-up: env ## [EC2] GPU 구성 실행 (make up 과 같음)
 	$(COMPOSE_GPU) up -d --build
