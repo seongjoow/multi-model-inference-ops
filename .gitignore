@@ -9,7 +9,8 @@ data/
 *.onnx
 *.zip
 .env.bak
-legacy/
+results-pilot/
+results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
