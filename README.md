@@ -128,9 +128,26 @@ make compare EXPS="e2-base e2a-batch16"      # → results/compare/<이름들>/c
 | `e1-seqs64` | `VLLM_MAX_NUM_SEQS` 32 → 64 | LLM 한계가 동시 처리 슬롯 수인가, TPOT를 얼마나 내주는가 |
 | `e2a-batch16` | CV 배치 16, 배치 대기 30 ms | GPU 시분할 대기를 큰 배치가 나눠 내는가 |
 | `e2b-workers2` | CV 워커 2개 (`CV_WORKERS`) | 해독 병렬화와 GPU 차례 확보로 경합 중 용량이 오르는가 |
-| `e3-shed` | `CV_MAX_QUEUE` 10000 → 20 | 넘치는 요청을 일찍 거절(429)해 받아들인 요청의 SLO를 지키는가 |
+| `e3-shed8` | `CV_MAX_QUEUE` 10000 → 8 | 넘치는 요청을 일찍 거절(429)해 받아들인 요청의 SLO를 지키는가 (상한은 지연 예산으로 계산) |
+| `e3-shed20` | `CV_MAX_QUEUE` 10000 → 20 | 대조군: 상한이 지연 예산보다 크면 어떻게 되는가 |
 | `e4-yolo26` | YOLO11n → YOLO26n | 모델 버전 교체가 추론 시간·용량에 주는 영향 |
 | `e5-reliable` | `CV_QUEUE_MODE=reliable` | 워커 장애 때 작업이 유실되지 않는가 |
+
+### 과제 실험 전체를 한 번에 (재현용)
+
+보고서의 모든 결과는 한 세션(같은 GPU, 같은 커밋)에서 아래 한 줄로 만든 것입니다. 실행 목록과 순서는 `experiments/run_all.sh`에 있습니다.
+
+```bash
+# EC2 (tmux 안에서, 약 4시간)
+make exp-all                       # → results/base, base-h2, e1-seqs64, e2a-batch16, e2b-workers2, e3-shed8, e3-shed20, e4-yolo26, e5-simple, e5-reliable
+
+# Mac (results/ 를 가져온 뒤)
+make report EXP=base && make report EXP=base-h2
+make compare EXPS="base e1-seqs64"                                  # E1: vLLM 슬롯
+make compare EXPS="base e2a-batch16 e2b-workers2 e3-shed8 e3-shed20" # E2, E3: 경합 중 CV
+make compare EXPS="base e4-yolo26"                                  # E4: 모델 버전
+make fault-report EXPS="e5-simple e5-reliable"                      # E5: 워커 장애
+```
 
 ### 장애 재현 (워커 장애)
 

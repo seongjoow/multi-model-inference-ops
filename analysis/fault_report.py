@@ -56,6 +56,30 @@ def load_run(d: Path) -> dict:
     return {"name": d.name, "dir": d, "t0": t0, "ev": ev, "info": info, "cv": cv, "prom": prom, "recovered": recovered}
 
 
+def alert_onsets(run: dict, kill: float | None) -> tuple[list[tuple[str, float]], list[str]]:
+    """경보별로 '장애 뒤 처음 새로 울린 시각'과 '장애 전부터 이미 울리던 경보'를 나눈다.
+
+    ALERTS 는 울리는 동안만 값이 있으므로(1초 간격), 2초 넘게 비면 새로 울린 것으로 본다.
+    직전 실험·설정 전환에서 이어진 경보를 이번 장애의 탐지로 세지 않기 위해서다.
+    """
+    onsets, before = [], []
+    for metric, s in series(run["prom"], "alerts", run["t0"]):
+        idx = sorted(float(t) for t in s.dropna().index)
+        if not idx:
+            continue
+        name = metric.get("alertname", "?")
+        starts = [t for i, t in enumerate(idx) if i == 0 or t - idx[i - 1] > 2.0]
+        if kill is None:
+            onsets.append((name, starts[0]))
+            continue
+        if any(t < kill for t in idx):
+            before.append(name)
+        new = [t for t in starts if t >= kill]
+        if new:
+            onsets.append((name, new[0]))
+    return sorted(onsets, key=lambda x: x[1]), sorted(set(before))
+
+
 def first_after(s: pd.Series, t: float, cond) -> float | None:
     hit = s[(s.index >= t) & cond(s)]
     return float(hit.index[0]) if len(hit) else None
@@ -78,19 +102,15 @@ def summarize(run: dict) -> list[str]:
         if up is not None:
             t = first_after(q, up + 1, lambda s: s <= 5)
             cleared = f"{t - up:.0f}" if t is not None else "끝까지 안 됨"
-    alerts = []
-    for metric, s in series(run["prom"], "alerts", run["t0"]):
-        s = s.dropna()
-        if len(s) and kill is not None:
-            first = float(s.index[0])
-            alerts.append(f"{metric.get('alertname', '?')} (+{first - kill:.0f}s)")
+    onsets, pre_alerts = alert_onsets(run, kill)
+    alerts = [f"{name} (+{t - (kill or 0):.0f}s)" for name, t in onsets]
     lost = int((cv["status"] == "504").sum())
     other = cv[~cv["status"].isin(["200", "504"])]["status"].value_counts()
     return [run["name"], run["info"].get("queue_mode", "?"), run["info"].get("mode", "?"),
             run["info"].get("workers", "?"), str(lost), str(run["recovered"]),
             ", ".join(f"{k}×{v}" for k, v in other.items()) or "-", qmax,
             f"{up - kill:.0f}" if kill is not None and up is not None else "-", cleared, lat(before), lat(after),
-            "; ".join(sorted(alerts)) or "없음"]
+            "; ".join(alerts) or "없음", ", ".join(pre_alerts) or "-"]
 
 
 def fig_run(run: dict, out: Path) -> Path:
@@ -135,13 +155,10 @@ def fig_run(run: dict, out: Path) -> Path:
         axes[3].step(s.index, s.values, where="post", color=rp.C1)
     axes[3].set(title="살아 있는 워커 수 (heartbeat 기준)", ylabel="개", xlabel="부하 시작 후 시간 (초)")
     axes[3].set_ylim(bottom=0)
-    alerts = series(run["prom"], "alerts", run["t0"])
-    for i, (metric, s) in enumerate(alerts):
-        s = s.dropna()
-        if len(s):
-            t = float(s.index[0])
-            axes[2].annotate(f"경보: {metric.get('alertname', '?')}", xy=(t, 0), xycoords=("data", "axes fraction"),
-                             xytext=(2, 6 + 12 * i), textcoords="offset points", fontsize=8, color=rp.INK)
+    onsets, _ = alert_onsets(run, kill)
+    for i, (name, t) in enumerate(onsets):
+        axes[2].annotate(f"경보: {name}", xy=(t, 0), xycoords=("data", "axes fraction"),
+                         xytext=(2, 6 + 12 * i), textcoords="offset points", fontsize=8, color=rp.INK)
     fig.suptitle(f"장애 재현: {run['name']} (큐 모드 {run['info'].get('queue_mode', '?')}, 음영 = 워커가 없던 구간)",
                  x=0.01, ha="left", fontsize=12.5, fontweight="bold", color=rp.INK)
     fig.tight_layout()
@@ -171,10 +188,11 @@ def main() -> int:
              "- 유실 의심 = 504 (게이트웨이가 결과를 `CV_WAIT_TIMEOUT_S` 동안 기다렸지만 끝내 받지 못한 요청)",
              "- 되살린 작업 = 워커가 재시작할 때 처리 목록에서 큐로 되돌린 작업 수 (reliable 모드만)",
              "- 복구 = 종료부터 워커가 다시 뜰 때까지(초), 적체 해소 = 재시작 후 큐 길이가 5 이하로 돌아올 때까지(초)",
-             "- 경보 옆 +N s = 워커 종료 후 처음 firing 이 된 시점", "",
+             "- 경보 옆 +N s = 워커 종료 뒤 새로 firing 이 된 시점 (울린 순서). '장애 전부터 울린 경보'는 직전 실험이나 "
+             "설정 전환에서 이어진 것이라 이번 장애의 탐지로 세지 않음", "",
              rp.md_table(["실험", "큐 모드", "장애 방식", "워커 수", "504 (유실 의심)", "되살린 작업", "그 밖의 실패",
                           "장애 중 최대 큐", "복구 (초)", "적체 해소 (초)", "장애 전 CV p95 (ms)",
-                          "재시작 후 60초 CV p95 (ms)", "울린 경보"], [summarize(r) for r in runs]), ""]
+                          "재시작 후 60초 CV p95 (ms)", "울린 경보", "장애 전부터 울린 경보"], [summarize(r) for r in runs]), ""]
     lines += [f"![{f.stem}]({f.name})" for f in figs] + [""]
     (out / "fault_report.md").write_text("\n".join(lines))
     print(f"장애 실험 {len(runs)}개 → {out}/")

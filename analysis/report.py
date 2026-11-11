@@ -373,9 +373,16 @@ def knee(d: pd.DataFrame, rate_col: str, prefix: str, latency_col: str, latency_
     return "측정한 범위 안에서는 포화 신호가 없습니다 (처리 한계는 더 높은 도착률에 있음)."
 
 
+def fmt_rate(v) -> str:
+    """도착률 표시: 0.25 는 0.25 로, 4 는 4.0 으로 (반올림으로 다른 값처럼 보이지 않게)."""
+    if v is None or pd.isna(v):
+        return "-"
+    return f"{v:.1f}" if float(v) * 10 == int(float(v) * 10) else f"{v:g}"
+
+
 def rate_label(r: pd.Series, col: str) -> str:
     """도착률. 반복 중 하나라도 측정이 무효였으면 † 표시."""
-    s = fmt(r[col], 1)
+    s = fmt_rate(r[col])
     return s + " †" if r.get("invalid_reps", 0) else s
 
 
@@ -468,7 +475,7 @@ def write_report(cond: pd.DataFrame, runs: pd.DataFrame, plan: dict, figs: list[
         for w in ("llm", "cv"):
             v = r.get(f"{w}_non200")
             if isinstance(v, str) and v:
-                failed.append([r["scenario"], str(r["rep"]), fmt(r.get("llm_rate"), 1), fmt(r.get("cv_rate"), 1),
+                failed.append([r["scenario"], str(r["rep"]), fmt_rate(r.get("llm_rate")), fmt_rate(r.get("cv_rate")),
                                w.upper(), v])
     if failed:
         lines += ["## 200이 아닌 응답이 있었던 단계", "",
@@ -484,7 +491,7 @@ def write_report(cond: pd.DataFrame, runs: pd.DataFrame, plan: dict, figs: list[
                   "시스템이 아니라 측정 도구가 먼저 한계에 닿은 것이라, 용량 판단에서는 빼고 '과부하 때 어떻게 실패하는가'를 "
                   "보는 자료로만 씁니다.", "",
                   md_table(["시나리오", "회차", "LLM 도착률", "CV 도착률", "이유"],
-                           [[r["scenario"], str(r["rep"]), fmt(r.get("llm_rate"), 1), fmt(r.get("cv_rate"), 1),
+                           [[r["scenario"], str(r["rep"]), fmt_rate(r.get("llm_rate")), fmt_rate(r.get("cv_rate")),
                              r["invalid_reason"]] for _, r in bad.iterrows()]), ""]
     if figs:
         lines += ["## 그래프", ""] + [f"![{f.stem}]({f.name})" for f in figs] + [""]

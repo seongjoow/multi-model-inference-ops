@@ -63,10 +63,17 @@ def apply(env_path: Path, values: dict[str, str]) -> list[tuple[str, str | None,
     return changes
 
 
-def wait_ready(gateway: str, timeout: float) -> int:
-    """게이트웨이 /readyz(Redis·LLM)와 /metrics 의 cv_workers_alive 가 기대한 워커 수에 닿을 때까지 기다린다."""
+def wait_ready(gateway: str, timeout: float, settle: float = 20.0) -> int:
+    """게이트웨이 /readyz(Redis·LLM)와 /metrics 의 cv_workers_alive 가 기대한 워커 수에 닿을 때까지 기다린다.
+
+    방금 교체된 워커의 heartbeat 키는 TTL(기본 15초) 동안 Redis에 남아 '살아 있음'으로 세진다.
+    그래서 먼저 settle 초를 기다려 옛 키가 사라진 뒤에 센다 (새 워커가 뜨기 전에 실험이 시작되는 것을 막음).
+    """
     env = parse(ROOT / ".env") if (ROOT / ".env").is_file() else {}
     want = int(env.get("CV_WORKERS", "1") or 1)
+    if settle > 0:
+        print(f"  옛 워커의 heartbeat가 사라지도록 {settle:.0f}초 기다립니다", flush=True)
+        time.sleep(settle)
     t0, last = time.time(), 0.0
     state = "시작 전"
     while time.time() - t0 < timeout:
@@ -103,10 +110,11 @@ def main() -> int:
     p.add_argument("--wait", action="store_true", help="설정 대신, 서비스가 준비될 때까지 기다리기만 한다")
     p.add_argument("--gateway", default="http://localhost:8000")
     p.add_argument("--timeout", type=float, default=900)
+    p.add_argument("--settle", type=float, default=20, help="--wait 전에 기다릴 초 (옛 heartbeat 만료용, CV_HEARTBEAT_TTL_S + 5)")
     args = p.parse_args()
 
     if args.wait:
-        return wait_ready(args.gateway, args.timeout)
+        return wait_ready(args.gateway, args.timeout, args.settle)
     if args.list or not args.conf:
         for f in sorted(CONF_DIR.glob("*.env")):
             first = next((ln[1:].strip() for ln in f.read_text().splitlines() if ln.startswith("#")), "")

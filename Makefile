@@ -21,7 +21,7 @@ EXP      ?= d3
 export GIT_COMMIT := $(shell git describe --always --dirty 2>/dev/null || echo unknown)
 PYTHON   ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
-.PHONY: help env llm-mac up down logs ps smoke dash load-llm load-cv load summary exp-pilot exp report use confs compare fault-worker fault-report gpu-up gpu-down gpu-logs gpu-ps
+.PHONY: help env llm-mac up down logs ps smoke dash load-llm load-cv load summary exp-pilot exp exp-all report use confs compare fault-worker fault-report gpu-up gpu-down gpu-logs gpu-ps
 
 help: ## 명령 목록
 	@echo "현재 환경: $(PLATFORM)"
@@ -73,6 +73,10 @@ exp-pilot: env ## [EC2] 실험 시험 실행 (약 12분). 도착률 범위가 �
 
 exp: env ## [EC2] 본 실험 (기본 3회 반복, 약 80분). ARGS="--llm-rates 1,2,4,8 --cv-rates 10,25,50" 처럼 변경
 	python3 experiments/run.py --name $(EXP) $(ARGS)
+
+exp-all: env ## [EC2] 과제 실험 전체를 한 세션에서 실행 (약 4시간, tmux 안에서). 목록은 experiments/run_all.sh
+	@mkdir -p results
+	bash experiments/run_all.sh 2>&1 | tee results/run_all.log
 
 report: ## [Mac] 실험 결과 분석 → results/<EXP>/report/ (표, 그래프, report.md)
 	$(PYTHON) analysis/report.py results/$(EXP)
