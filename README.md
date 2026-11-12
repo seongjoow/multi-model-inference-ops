@@ -191,10 +191,11 @@ make fault-report EXPS="e5-simple e5-reliable"   # 유실 의심 요청, 되살�
 | `CV_WORKERS` | CV 워커 컨테이너 수 |
 | `CV_MAX_QUEUE` | CV 큐 길이 상한. 넘으면 429로 거절 |
 
-## 알려진 함정: redis-py 8.x의 소켓 읽기 한도
+## 제출물
 
-redis-py 8.x는 `socket_timeout` 기본값이 5초입니다. 그래서 결과를 최대 `CV_WAIT_TIMEOUT_S`(60초) 동안 기다리는 BLPOP이 5초에 `TimeoutError`로 끊기고, 처리되지 않은 예외라 500이 됩니다. D3 본 실험의 CV 과부하 구간에서 나온 500이 이 경우로 보입니다. 게이트웨이는 이제 결과 대기 전용 연결 풀을 따로 두고 읽기 한도를 최대 대기 시간보다 길게 잡습니다. Redis 연결 문제는 500 대신 503 + `Retry-After`로 돌려줍니다. 또 결과를 기다리던 요청이 시간 초과(504)로 끝난 작업은 워커가 추론하지 않고 건너뜁니다(`cv_worker_jobs_total{outcome="expired"}`).
-
-## 사용 내역 및 구현 범위
-
-사용한 모델·오픈소스·라이선스와 AI 도구 사용 범위는 `docs/ai-usage.md`에 정리합니다.
+| 제출물 | 위치 |
+| --- | --- |
+| System Architecture | [docs/architecture.md](docs/system-architecture.md) |
+| Technical Report | [docs/technical-report.pdf](docs/technical-report.pdf) |
+| Executive Summary | [docs/executive-summary.pdf](docs/executive-summary.pdf) |
+| 사용 내역 및 구현 범위 | [docs/ai-usage.md](docs/ai-usage.md) |
